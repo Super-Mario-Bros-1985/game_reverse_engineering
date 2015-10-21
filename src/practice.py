@@ -2,6 +2,15 @@
 
 import sys
 
+DEBUG_SEGMENT = True
+DEBUG_GRAPHVIZ = True
+#DEBUG_REACHED = True
+
+try:
+	import pygraphviz
+except ImportError:
+	DEBUG_GRAPHVIZ = False
+
 class Instruction:
 	def __init__(self, opcode, oprands):
 		self.opcode = opcode
@@ -49,6 +58,13 @@ class Segment:
 			ret += '\n\t--> %s' % (self.branch(), )
 		for inst in self.instructions:
 			ret += '\n\t%s' % (inst, )
+		return ret
+	def gv(self): # for graphviz
+		ret = 'Segment %d' % self.id
+		if self.label:
+			ret += '\n(%s)' % self.label
+		if self._return:
+			ret += '\nEND'
 		return ret
 
 	def append(self, inst):
@@ -113,12 +129,25 @@ for line in lines:
 			segment._return = True
 			segment = None
 
-#if False:
-if True:
+if 'DEBUG_SEGMENT' in globals() and DEBUG_SEGMENT:
 	for id in range(1, Segment.global_id[0] + 1):
 		segment = Segment.idx_tbl[id]
 		print(segment.pp())
 
+if 'DEBUG_GRAPHVIZ' in globals() and DEBUG_GRAPHVIZ:
+	g = pygraphviz.AGraph()
+	
+	for id in range(1, Segment.global_id[0] + 1):
+		segment = Segment.idx_tbl[id]
+		if segment._return:
+			g.add_node(segment.gv())
+		else:
+			g.add_edge(segment.gv(), segment.passthru().gv(), dir = 'forward')
+		if segment._branch:
+			g.add_edge(segment.gv(), segment.branch().gv(), dir = 'forward', color = 'blue', style = 'dashed')
+
+	g.layout(prog='dot')
+	g.draw('segment_diagram.png')
 
 # part ii - identify branch & loop structures
 
@@ -155,17 +184,16 @@ while len(pending) > 0:
 		if branch_id not in pending:
 			pending.append(branch_id)
 
-if False:
-#if True:
+if 'DEBUG_REACHED' in globals() and DEBUG_REACHED:
 	for id in range(1, max):
 		print(id, reached[id])
-
-for id in range(1, max):
-	segment = Segment.idx_tbl[id]
-	if segment.branch() is None:
-		continue
-	if id in reached[id]:
-		print(id, 'loop')
-	else:
-		print(id, reached[segment.passthru().id] ^ reached[segment.branch().id])
+	
+	for id in range(1, max):
+		segment = Segment.idx_tbl[id]
+		if segment.branch() is None:
+			continue
+		if id in reached[id]:
+			print(id, 'loop')
+		else:
+			print(id, reached[segment.passthru().id] ^ reached[segment.branch().id])
 
